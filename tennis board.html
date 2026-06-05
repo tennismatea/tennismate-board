@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TennisMate AI - 戦術ボード</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
+
+  :root {
+    --green: #2d7a3a;
+    --green-light: #3a9648;
+    --green-dark: #1a5226;
+    --line: rgba(255,255,255,0.85);
+    --brand: #4ade80;
+    --bg: #0d1f13;
+  }
+
+  body {
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: 'Georgia', serif;
+    overflow-x: hidden;
+  }
+
+  /* Header */
+  .header {
+    width: 100%;
+    background: rgba(0,0,0,0.4);
+    border-bottom: 1px solid rgba(74,222,128,0.2);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-logo { font-size: 22px; }
+  .header-title {
+    font-size: 16px;
+    color: var(--brand);
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+  .header-sub {
+    font-size: 11px;
+    color: #666;
+    margin-left: auto;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    width: 100%;
+    max-width: 480px;
+    padding: 8px 12px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .tool-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #ccc;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .tool-btn:active, .tool-btn.active {
+    background: rgba(74,222,128,0.15);
+    border-color: var(--brand);
+    color: var(--brand);
+  }
+  .tool-btn.danger {
+    border-color: rgba(239,68,68,0.3);
+    color: #f87171;
+  }
+  .tool-btn.danger:active {
+    background: rgba(239,68,68,0.15);
+  }
+
+  /* Player color selector */
+  .color-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 12px;
+  }
+  .color-label { font-size: 12px; color: #888; }
+  .color-dot {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .color-dot.selected { border-color: white; transform: scale(1.2); }
+
+  /* Court container */
+  .court-wrap {
+    width: 100%;
+    max-width: 480px;
+    padding: 0 12px 12px;
+    position: relative;
+  }
+
+  canvas {
+    width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    cursor: crosshair;
+    touch-action: none;
+    display: block;
+  }
+
+  /* Mode indicator */
+  .mode-indicator {
+    text-align: center;
+    font-size: 12px;
+    color: var(--brand);
+    padding: 4px;
+    min-height: 20px;
+  }
+
+  /* Instructions */
+  .instructions {
+    width: 100%;
+    max-width: 480px;
+    padding: 8px 16px 16px;
+    font-size: 11px;
+    color: #555;
+    line-height: 1.8;
+  }
+  .instructions span { color: #888; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">🎾</div>
+  <div class="header-title">戦術ボード</div>
+  <div class="header-sub">TennisMate AI</div>
+</div>
+
+<div class="toolbar">
+  <button class="tool-btn active" id="btn-player" onclick="setMode('player')">👤 選手</button>
+  <button class="tool-btn" id="btn-ball" onclick="setMode('ball')">🎾 ボール</button>
+  <button class="tool-btn" id="btn-arrow" onclick="setMode('arrow')">➡️ 矢印</button>
+  <button class="tool-btn" id="btn-move" onclick="setMode('move')">✋ 移動</button>
+  <button class="tool-btn danger" onclick="clearAll()">🗑️ クリア</button>
+</div>
+
+<div class="color-row">
+  <span class="color-label">チームカラー：</span>
+  <div class="color-dot selected" style="background:#ef4444" onclick="setColor('#ef4444','#fff')" id="col-red"></div>
+  <div class="color-dot" style="background:#3b82f6" onclick="setColor('#3b82f6','#fff')" id="col-blue"></div>
+  <div class="color-dot" style="background:#f59e0b" onclick="setColor('#f59e0b','#000')" id="col-yellow"></div>
+  <div class="color-dot" style="background:#8b5cf6" onclick="setColor('#8b5cf6','#fff')" id="col-purple"></div>
+  <div class="color-dot" style="background:#ffffff" onclick="setColor('#ffffff','#000')" id="col-white"></div>
+</div>
+
+<div class="court-wrap">
+  <div class="mode-indicator" id="mode-text">👤 選手を配置：コートをタップ</div>
+  <canvas id="court" width="456" height="680"></canvas>
+</div>
+
+<div class="instructions">
+  <span>使い方：</span> 上のボタンでモードを選択 → コートをタップ/ドラッグ<br>
+  <span>選手：</span>タップで配置（番号自動）　<span>移動：</span>選手をドラッグ<br>
+  <span>矢印：</span>ドラッグで方向を描く　<span>クリア：</span>全部消す
+</div>
+
+<script>
+const canvas = document.getElementById('court');
+const ctx = canvas.getContext('2d');
+
+// State
+let mode = 'player';
+let playerColor = '#ef4444';
+let playerTextColor = '#fff';
+let players = [];
+let balls = [];
+let arrows = [];
+let playerCount = 1;
+let dragging = null;
+let dragType = null;
+let arrowStart = null;
+
+// Court dimensions (canvas coords)
+const W = 456, H = 680;
+const margin = { left: 40, right: 40, top: 40, bottom: 40 };
+const courtW = W - margin.left - margin.right;
+const courtH = H - margin.top - margin.bottom;
+
+function drawCourt() {
+  // Background
+  ctx.fillStyle = '#2d7a3a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Court surface gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#2d7a3a');
+  grad.addColorStop(0.5, '#3a9648');
+  grad.addColorStop(1, '#2d7a3a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(margin.left, margin.top, courtW, courtH);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 2;
+
+  const L = margin.left, T = margin.top;
+  const R = L + courtW, B = T + courtH;
+  const midY = T + courtH / 2;
+  const serviceW = courtW * 0.27;
+  const serviceH = courtH * 0.21;
+
+  // Outer boundary
+  ctx.strokeRect(L, T, courtW, courtH);
+
+  // Net
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.beginPath();
+  ctx.moveTo(L, midY);
+  ctx.lineTo(R, midY);
+  ctx.stroke();
+
+  // Net post dots
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.beginPath(); ctx.arc(L, midY, 4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(R, midY, 4, 0, Math.PI*2); ctx.fill();
+
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+
+  // Singles sidelines
+  ctx.beginPath();
+  ctx.moveTo(L + serviceW, T);
+  ctx.lineTo(L + serviceW, B);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(R - serviceW, T);
+  ctx.lineTo(R - serviceW, B);
+  ctx.stroke();
+
+  // Service boxes - top half
+  ctx.beginPath();
+  ctx.moveTo(L + serviceW, T + serviceH);
+  ctx.lineTo(R - serviceW, T + serviceH);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(L + serviceW, midY - serviceH);
+  ctx.lineTo(R - serviceW, midY - serviceH);
+  ctx.stroke();
+
+  // Center service line - top
+  const midX = L + courtW / 2;
+  ctx.beginPath();
+  ctx.moveTo(midX, T + serviceH);
+  ctx.lineTo(midX, midY - serviceH);
+  ctx.stroke();
+
+  // Service boxes - bottom half
+  ctx.beginPath();
+  ctx.moveTo(L + serviceW, midY + serviceH);
+  ctx.lineTo(R - serviceW, midY + serviceH);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(L + serviceW, B - serviceH);
+  ctx.lineTo(R - serviceW, B - serviceH);
+  ctx.stroke();
+
+  // Center service line - bottom
+  ctx.beginPath();
+  ctx.moveTo(midX, midY + serviceH);
+  ctx.lineTo(midX, B - serviceH);
+  ctx.stroke();
+
+  // Center mark at baseline
+  ctx.beginPath();
+  ctx.moveTo(midX - 8, T);
+  ctx.lineTo(midX + 8, T);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(midX - 8, B);
+  ctx.lineTo(midX + 8, B);
+  ctx.stroke();
+
+  // Net label
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = '11px Georgia';
+  ctx.textAlign = 'center';
+  ctx.fillText('NET', midX, midY - 8);
+}
+
+function drawArrows() {
+  arrows.forEach(a => {
+    ctx.strokeStyle = a.color || 'rgba(255,255,100,0.85)';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(a.x1, a.y1);
+    ctx.lineTo(a.x2, a.y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrowhead
+    const angle = Math.atan2(a.y2 - a.y1, a.x2 - a.x1);
+    const len = 14;
+    ctx.fillStyle = a.color || 'rgba(255,255,100,0.85)';
+    ctx.beginPath();
+    ctx.moveTo(a.x2, a.y2);
+    ctx.lineTo(a.x2 - len * Math.cos(angle - 0.4), a.y2 - len * Math.sin(angle - 0.4));
+    ctx.lineTo(a.x2 - len * Math.cos(angle + 0.4), a.y2 - len * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+function drawPlayers() {
+  players.forEach(p => {
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(p.x + 2, p.y + 3, 16, 10, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Circle
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 16, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Number
+    ctx.fillStyle = p.textColor;
+    ctx.font = 'bold 14px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.num, p.x, p.y);
+
+    // Label
+    if (p.label) {
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = '10px Georgia';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(p.label, p.x, p.y + 20);
+    }
+  });
+}
+
+function drawBalls() {
+  balls.forEach(b => {
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(b.x + 2, b.y + 3, 11, 7, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Ball
+    ctx.fillStyle = '#d4f000';
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 11, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#a8c000';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Seam
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 8, 0.3, Math.PI - 0.3);
+    ctx.stroke();
+  });
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  drawCourt();
+  drawArrows();
+  drawPlayers();
+  drawBalls();
+}
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  let clientX, clientY;
+  if (e.touches) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
+  };
+}
+
+function findPlayer(x, y) {
+  return players.find(p => Math.hypot(p.x - x, p.y - y) < 20);
+}
+
+function findBall(x, y) {
+  return balls.find(b => Math.hypot(b.x - x, b.y - y) < 16);
+}
+
+canvas.addEventListener('touchstart', onStart, { passive: false });
+canvas.addEventListener('mousedown', onStart);
+canvas.addEventListener('touchmove', onMove, { passive: false });
+canvas.addEventListener('mousemove', onMove);
+canvas.addEventListener('touchend', onEnd);
+canvas.addEventListener('mouseup', onEnd);
+
+function onStart(e) {
+  e.preventDefault();
+  const { x, y } = getPos(e);
+
+  if (mode === 'player') {
+    players.push({ x, y, color: playerColor, textColor: playerTextColor, num: playerCount++, label: '' });
+    render();
+  } else if (mode === 'ball') {
+    balls.push({ x, y });
+    render();
+  } else if (mode === 'move') {
+    const p = findPlayer(x, y);
+    if (p) { dragging = p; dragType = 'player'; return; }
+    const b = findBall(x, y);
+    if (b) { dragging = b; dragType = 'ball'; }
+  } else if (mode === 'arrow') {
+    arrowStart = { x, y };
+  }
+}
+
+function onMove(e) {
+  e.preventDefault();
+  if (!dragging && !arrowStart) return;
+  const { x, y } = getPos(e);
+
+  if (dragging) {
+    dragging.x = x;
+    dragging.y = y;
+    render();
+  } else if (arrowStart) {
+    render();
+    // Preview arrow
+    ctx.strokeStyle = 'rgba(255,255,100,0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(arrowStart.x, arrowStart.y);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function onEnd(e) {
+  if (arrowStart) {
+    const { x, y } = getPos(e.changedTouches ? e : e);
+    const ex = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+    const ey = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+    const rect = canvas.getBoundingClientRect();
+    const endX = (ex - rect.left) * (W / rect.width);
+    const endY = (ey - rect.top) * (H / rect.height);
+
+    const dist = Math.hypot(endX - arrowStart.x, endY - arrowStart.y);
+    if (dist > 20) {
+      arrows.push({ x1: arrowStart.x, y1: arrowStart.y, x2: endX, y2: endY, color: 'rgba(255,255,100,0.9)' });
+    }
+    arrowStart = null;
+    render();
+  }
+  dragging = null;
+  dragType = null;
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + m)?.classList.add('active');
+
+  const texts = {
+    player: '👤 選手を配置：コートをタップ',
+    ball: '🎾 ボールを配置：コートをタップ',
+    arrow: '➡️ 矢印：ドラッグで方向を描く',
+    move: '✋ 移動：選手/ボールをドラッグ'
+  };
+  document.getElementById('mode-text').textContent = texts[m] || '';
+}
+
+function setColor(color, textColor) {
+  playerColor = color;
+  playerTextColor = textColor;
+  document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+  event.target.classList.add('selected');
+}
+
+function clearAll() {
+  if (confirm('全部消しますか？')) {
+    players = [];
+    balls = [];
+    arrows = [];
+    playerCount = 1;
+    render();
+  }
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
