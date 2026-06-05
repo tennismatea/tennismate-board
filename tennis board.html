@@ -113,11 +113,13 @@
 
   canvas {
     width: 100%;
+    max-height: 65vh;
     border-radius: 8px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     cursor: crosshair;
     touch-action: none;
     display: block;
+    object-fit: contain;
   }
 
   /* Mode indicator */
@@ -168,7 +170,7 @@
 
 <div class="court-wrap">
   <div class="mode-indicator" id="mode-text">👤 選手を配置：コートをタップ</div>
-  <canvas id="court" width="456" height="680"></canvas>
+  <canvas id="court" width="400" height="650"></canvas>
 </div>
 
 <div class="instructions">
@@ -194,112 +196,81 @@ let dragType = null;
 let arrowStart = null;
 
 // Court dimensions (canvas coords)
-const W = 456, H = 680;
-const margin = { left: 40, right: 40, top: 40, bottom: 40 };
+const W = 400, H = 650;
+const margin = { left: 35, right: 35, top: 30, bottom: 30 };
 const courtW = W - margin.left - margin.right;
 const courtH = H - margin.top - margin.bottom;
 
 function drawCourt() {
-  // Background
-  ctx.fillStyle = '#2d7a3a';
+  // Background (outside court)
+  ctx.fillStyle = '#1a5226';
   ctx.fillRect(0, 0, W, H);
-
-  // Court surface gradient
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#2d7a3a');
-  grad.addColorStop(0.5, '#3a9648');
-  grad.addColorStop(1, '#2d7a3a');
-  ctx.fillStyle = grad;
-  ctx.fillRect(margin.left, margin.top, courtW, courtH);
-
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-  ctx.lineWidth = 2;
 
   const L = margin.left, T = margin.top;
   const R = L + courtW, B = T + courtH;
+  const midX = L + courtW / 2;
   const midY = T + courtH / 2;
-  const serviceW = courtW * 0.27;
-  const serviceH = courtH * 0.21;
 
-  // Outer boundary
+  // Court surface
+  ctx.fillStyle = '#2d7a3a';
+  ctx.fillRect(L, T, courtW, courtH);
+
+  // === テニスコート正確なライン ===
+  // 実際の比率: コート全長23.77m、シングルス幅8.23m、ダブルス幅10.97m
+  // サービスライン: ネットから6.4m = 全長の約27%
+
+  const singlesL = L + courtW * 0.115;  // シングルスサイドライン左
+  const singlesR = R - courtW * 0.115;  // シングルスサイドライン右
+  const serviceFromNet = courtH * 0.269; // サービスラインの位置（ネットから）
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+  ctx.lineWidth = 2;
+
+  // 外側ベースライン・サイドライン（ダブルス）
   ctx.strokeRect(L, T, courtW, courtH);
 
-  // Net
+  // シングルスサイドライン（左右）
+  ctx.beginPath(); ctx.moveTo(singlesL, T); ctx.lineTo(singlesL, B); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(singlesR, T); ctx.lineTo(singlesR, B); ctx.stroke();
+
+  // ネット
   ctx.lineWidth = 3;
   ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-  ctx.beginPath();
-  ctx.moveTo(L, midY);
-  ctx.lineTo(R, midY);
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(L, midY); ctx.lineTo(R, midY); ctx.stroke();
 
-  // Net post dots
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+
+  // サービスライン（上側）- ネットからserviceFromNet
+  const serviceLineTop = midY - serviceFromNet;
+  ctx.beginPath(); ctx.moveTo(singlesL, serviceLineTop); ctx.lineTo(singlesR, serviceLineTop); ctx.stroke();
+
+  // サービスライン（下側）- ネットからserviceFromNet
+  const serviceLineBottom = midY + serviceFromNet;
+  ctx.beginPath(); ctx.moveTo(singlesL, serviceLineBottom); ctx.lineTo(singlesR, serviceLineBottom); ctx.stroke();
+
+  // センターサービスライン（上半分）
+  ctx.beginPath(); ctx.moveTo(midX, serviceLineTop); ctx.lineTo(midX, midY); ctx.stroke();
+
+  // センターサービスライン（下半分）
+  ctx.beginPath(); ctx.moveTo(midX, midY); ctx.lineTo(midX, serviceLineBottom); ctx.stroke();
+
+  // センターマーク（ベースライン上）
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(midX - 10, T); ctx.lineTo(midX + 10, T); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(midX - 10, B); ctx.lineTo(midX + 10, B); ctx.stroke();
+
+  // ネットポスト
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.beginPath(); ctx.arc(L, midY, 4, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(R, midY, 4, 0, Math.PI*2); ctx.fill();
 
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-
-  // Singles sidelines
-  ctx.beginPath();
-  ctx.moveTo(L + serviceW, T);
-  ctx.lineTo(L + serviceW, B);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(R - serviceW, T);
-  ctx.lineTo(R - serviceW, B);
-  ctx.stroke();
-
-  // Service boxes - top half
-  ctx.beginPath();
-  ctx.moveTo(L + serviceW, T + serviceH);
-  ctx.lineTo(R - serviceW, T + serviceH);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(L + serviceW, midY - serviceH);
-  ctx.lineTo(R - serviceW, midY - serviceH);
-  ctx.stroke();
-
-  // Center service line - top
-  const midX = L + courtW / 2;
-  ctx.beginPath();
-  ctx.moveTo(midX, T + serviceH);
-  ctx.lineTo(midX, midY - serviceH);
-  ctx.stroke();
-
-  // Service boxes - bottom half
-  ctx.beginPath();
-  ctx.moveTo(L + serviceW, midY + serviceH);
-  ctx.lineTo(R - serviceW, midY + serviceH);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(L + serviceW, B - serviceH);
-  ctx.lineTo(R - serviceW, B - serviceH);
-  ctx.stroke();
-
-  // Center service line - bottom
-  ctx.beginPath();
-  ctx.moveTo(midX, midY + serviceH);
-  ctx.lineTo(midX, B - serviceH);
-  ctx.stroke();
-
-  // Center mark at baseline
-  ctx.beginPath();
-  ctx.moveTo(midX - 8, T);
-  ctx.lineTo(midX + 8, T);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(midX - 8, B);
-  ctx.lineTo(midX + 8, B);
-  ctx.stroke();
-
-  // Net label
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  // NET ラベル
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.font = '11px Georgia';
   ctx.textAlign = 'center';
-  ctx.fillText('NET', midX, midY - 8);
+  ctx.textBaseline = 'middle';
+  ctx.fillText('NET', midX, midY - 10);
 }
 
 function drawArrows() {
@@ -475,17 +446,23 @@ function onMove(e) {
 
 function onEnd(e) {
   if (arrowStart) {
-    const { x, y } = getPos(e.changedTouches ? e : e);
-    const ex = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-    const ey = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
-    const rect = canvas.getBoundingClientRect();
-    const endX = (ex - rect.left) * (W / rect.width);
-    const endY = (ey - rect.top) * (H / rect.height);
-
-    const dist = Math.hypot(endX - arrowStart.x, endY - arrowStart.y);
-    if (dist > 20) {
-      arrows.push({ x1: arrowStart.x, y1: arrowStart.y, x2: endX, y2: endY, color: 'rgba(255,255,100,0.9)' });
-    }
+    try {
+      const rect = canvas.getBoundingClientRect();
+      let ex, ey;
+      if (e.changedTouches && e.changedTouches.length > 0) {
+        ex = e.changedTouches[0].clientX;
+        ey = e.changedTouches[0].clientY;
+      } else {
+        ex = e.clientX;
+        ey = e.clientY;
+      }
+      const endX = (ex - rect.left) * (W / rect.width);
+      const endY = (ey - rect.top) * (H / rect.height);
+      const dist = Math.hypot(endX - arrowStart.x, endY - arrowStart.y);
+      if (dist > 20) {
+        arrows.push({ x1: arrowStart.x, y1: arrowStart.y, x2: endX, y2: endY, color: 'rgba(255,255,100,0.9)' });
+      }
+    } catch(err) {}
     arrowStart = null;
     render();
   }
@@ -514,7 +491,7 @@ function setColor(color, textColor) {
   event.target.classList.add('selected');
 }
 
-function clearAll() {
+function clearAll_OLD() {
   if (confirm('全部消しますか？')) {
     players = [];
     balls = [];
@@ -522,6 +499,21 @@ function clearAll() {
     playerCount = 1;
     render();
   }
+}
+
+function clearAll() {
+  players = [];
+  balls = [];
+  arrows = [];
+  playerCount = 1;
+  render();
+  document.getElementById('mode-text').textContent = '🗑️ クリアしました！';
+  setTimeout(() => {
+    document.getElementById('mode-text').textContent = '👤 選手を配置：コートをタップ';
+    mode = 'player';
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn-player').classList.add('active');
+  }, 1500);
 }
 
 // Initial render
